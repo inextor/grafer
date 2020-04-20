@@ -1,9 +1,30 @@
+var mysql		= require('mysql');
 
+function resolveAll( object )
+{
+	var promises	= [];
+	var index		= [];
 
-var mysql      = require('mysql');
+	for( var i in object )
+	{
+		index.push( i );
+		promises.push( object[ i ] );
+	}
 
+	return Promise.all( promises ).then
+	(
+	 	(values)=>
+		{
+			var obj = {};
+			for(var i=0;i<values.length;i++)
+			{
+				obj[ index[ i ] ] = values [ i ];
+			}
 
-
+			return obj;
+		}
+	);
+}
 class DbConnection
 {
 	constructor(host,user,password,database)
@@ -37,7 +58,6 @@ class DbConnection
 	}
 }
 
-
 if( process.argv.length !== 6 )
 {
 	console.error('Usage:\nnnode app.js host user password database');
@@ -52,32 +72,73 @@ else
 	{
 		return response.result.map((i)=>i['Tables_in_'+databaseName]);
 	})
-	.then((result)=>
+	.then((tables)=>
+	{
+		let schemas = {};
+		tables.forEach((table_name)=>
+		{
+			schemas[ table_name ] = {
+				table_name	: table_name,
+				fields		: [],
+				references	: {}
+			}
+		});
+		return Promise.resolve( schemas );
+	})
+	.then((schemas)=>
 	{
 		let promises = [];
+		let describes = {
 
-		result.forEach((table_name)=>
+		};
+
+		for(let i in schemas )
+		{
+			describes[ i ] = db.query('describe '+i);
+		};
+		return resolveAll({schemas: schemas,fields: resolveAll( describes )  });
+	})
+	.then((result)=>
+	{
+		let schemas = result.schemas;
+
+		for(let i in result.fields )
+		{
+			result.fields[i].result.forEach((j)=>
+			{
+
+				if( schemas[i].fields.find(k=> k == j.Field) == undefined )
+					schemas[i].fields.push( j.Field );
+			});
+		}
+		return Promise.resolve( schemas );
+	})
+	.then((schemas)=>
+	{
+		let promises = {};
+
+		for(let table_name in schemas )
 		{
 			let sql = 'SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA="'+databaseName+'" AND TABLE_NAME="'+table_name+'"'; // AND REFERENCED_COLUMN_NAME IS NOT NULL
-			promises.push( db.query( sql ) );
-		});
-		return Promise.all( promises );
+			promises[table_name] = db.query( sql );
+		}
+
+
+		return resolveAll({schemas:Promise.resolve(schemas), references: resolveAll( promises )});
 
 	})
 	.then((results)=>
 	{
-		let schemas = {
-		};
-		results.forEach((i)=>
+		let schemas = results.schemas;
+
+		for(let i in results.references)
 		{
 
+			let references = results.references[i].result;
 
-			i.result.forEach((j)=>
+			references.forEach((j)=>
 			{
-
-				if( !schemas[j.TABLE_NAME ] )
-				{
-					/*    CONSTRAINT_CATALOG: 'def',
+			/*    CONSTRAINT_CATALOG: 'def',
 	    CONSTRAINT_SCHEMA: 'pos',
 	    CONSTRAINT_NAME: 'stock_ibfk_1',
 	    TABLE_CATALOG: 'def',
@@ -90,14 +151,7 @@ else
 	    REFERENCED_TABLE_NAME: 'item',
 	    REFERENCED_COLUMN_NAME: 'id'
 		*/
-
-					schemas[ j.TABLE_NAME ] = {
-						fields		: [],
-						references	: {
-						}
-					};
-				}
-				schemas[ j.TABLE_NAME ].fields.push( j.COLUMN_NAME );
+				//schemas[ j.TABLE_NAME ].fields.push( j.COLUMN_NAME );
 				if( j.REFERENCED_TABLE_SCHEMA )
 				{
 					schemas[j.TABLE_NAME].references[ j.REFERENCED_TABLE_NAME  ] = 1;
@@ -107,7 +161,7 @@ else
 			//i.fields.forEach((j)=>
 			//{
 			//});
-		});
+		}
 
 		let s =  '';
 
@@ -117,6 +171,11 @@ else
 			let f = [];
 			f.push( ...fields );
 			s += `${i} [shape=record label="{${i} | ${f.join('\\n')}}"];\n`
+
+		}
+
+		for(let i in schemas )
+		{
 			let keys = Object.keys( schemas[i].references );
 
 			keys.forEach((j)=>
@@ -136,3 +195,4 @@ else
 		db.end();
 	});
 }
+
