@@ -55,12 +55,10 @@ else
 	.then((result)=>
 	{
 		let promises = [];
-		//console.log('First result', result );
 
 		result.forEach((table_name)=>
 		{
-			let sql = 'SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA="'+databaseName+'" AND TABLE_NAME="'+table_name+'" AND REFERENCED_COLUMN_NAME IS NOT NULL';
-			//console.log('Sql',sql);
+			let sql = 'SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA="'+databaseName+'" AND TABLE_NAME="'+table_name+'"'; // AND REFERENCED_COLUMN_NAME IS NOT NULL
 			promises.push( db.query( sql ) );
 		});
 		return Promise.all( promises );
@@ -73,15 +71,12 @@ else
 		results.forEach((i)=>
 		{
 
-			//console.log('i',i.result);
+
 			i.result.forEach((j)=>
 			{
-				//console.log( 'j' );
-				//console.log( j.TABLE_NAME );
 
 				if( !schemas[j.TABLE_NAME ] )
 				{
-					//console.log('if schemas ');
 					/*    CONSTRAINT_CATALOG: 'def',
 	    CONSTRAINT_SCHEMA: 'pos',
 	    CONSTRAINT_NAME: 'stock_ibfk_1',
@@ -105,10 +100,13 @@ else
 				schemas[ j.TABLE_NAME ].fields.push( j.COLUMN_NAME );
 				if( j.REFERENCED_TABLE_SCHEMA )
 				{
-					//console.log('referenced table ');
 					schemas[j.TABLE_NAME].references[ j.REFERENCED_TABLE_NAME  ] = 1;
 				}
 			});
+
+			//i.fields.forEach((j)=>
+			//{
+			//});
 		});
 
 		let s =  '';
