@@ -67,6 +67,7 @@ else
 {
 	let databaseName = process.argv[5];
 	let db = new DbConnection(process.argv[2],process.argv[3],process.argv[4],process.argv[5]);
+	let only_foreign_keys = true;
 
 	db.query('SHOW TABLES').then((response)=>
 	{
@@ -94,7 +95,7 @@ else
 
 		for(let i in schemas )
 		{
-			describes[ i ] = db.query('describe '+i);
+			describes[ i ] = db.query('describe `'+i+'`');
 		};
 		return resolveAll({schemas: schemas,fields: resolveAll( describes )  });
 	})
@@ -102,14 +103,21 @@ else
 	{
 		let schemas = result.schemas;
 
-		for(let i in result.fields )
+		if( !only_foreign_keys )
 		{
-			result.fields[i].result.forEach((j)=>
+			console.error('HERE');
+			for(let i in result.fields )
 			{
-
-				if( schemas[i].fields.find(k=> k == j.Field) == undefined )
-					schemas[i].fields.push( j.Field );
-			});
+				result.fields[i].result.forEach((j)=>
+				{
+					if( schemas[i].fields.find(k=> k == j.Field) == undefined )
+						schemas[i].fields.push( j.Field );
+				});
+			}
+		}
+		else
+		{
+			console.error('WHAT!!!');
 		}
 		return Promise.resolve( schemas );
 	})
@@ -151,7 +159,7 @@ else
 	    REFERENCED_TABLE_NAME: 'item',
 	    REFERENCED_COLUMN_NAME: 'id'
 		*/
-				//schemas[ j.TABLE_NAME ].fields.push( j.COLUMN_NAME );
+				schemas[ j.TABLE_NAME ].fields.push( j.COLUMN_NAME );
 				if( j.REFERENCED_TABLE_SCHEMA )
 				{
 					schemas[j.TABLE_NAME].references[ j.REFERENCED_TABLE_NAME  ] = 1;
@@ -168,8 +176,19 @@ else
 		for(let i in schemas )
 		{
 			let fields = schemas[i].fields;
-			let f = [];
-			f.push( ...fields );
+
+			//if( !this.only_foreign_keys )
+			//{
+			//	fields.forEach((j)=>
+			//	{
+			//		if( schemas[i].fields.find(k=>k==j) === undefined )
+			//		{
+			//			schemas[i].fields.push( j );
+			//		}
+			//	});
+			//}
+			let f = schemas[i].fields;
+
 			s += `${i} [shape=record label="{${i} | ${f.join('\\n')}}"];\n`
 
 		}
@@ -184,7 +203,10 @@ else
 			});
 		}
 
+		//graph [pad="0.5", nodesep="1", ranksep="2"]
+		//
 		console.log( `digraph G {
+			graph [pad="1.0"]
 			${s}
 		}`);
 		db.end();
